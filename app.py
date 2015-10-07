@@ -9,7 +9,7 @@ from flask import request
 import authentication as auth
 import MySQLdb as msql
 import dummy_data
-from authentication import BadPasswordError, NoUserExistsError
+from authentication import BadPasswordError, NoUserExistsError, UserAlreadyExists, AccessTokenExpiredError, NoUserExistsWithThisAccessTokenError
 
 app = Flask(__name__)
 app.debug = True
@@ -29,34 +29,34 @@ def connect_db():
 
     return db
 
-def authenticate_user(user_id):
-    """
-    returns True if user is successfully authenticated, else returns False
-    """
-    # TODO:
-    access_token = None
-    user_info = None
-    for x in dummy_data.existing_users:
-        if x['id'] == user_id:
-            access_token = x['access_token']
-            user_info = x
+# def authenticate_user(user_id):
+#     """
+#     returns True if user is successfully authenticated, else returns False
+#     """
+#     # TODO:
+#     access_token = None
+#     user_info = None
+#     for x in dummy_data.existing_users:
+#         if x['id'] == user_id:
+#             access_token = x['access_token']
+#             user_info = x
 
-    if access_token == None:
-        return (False, user_info)
-    else:
-        if access_token == request.args.get('access_token'):
-            return (True, user_info)
-        else:
-            return (False, user_info)
+#     if access_token == None:
+#         return (False, user_info)
+#     else:
+#         if access_token == request.args.get('access_token'):
+#             return (True, user_info)
+#         else:
+#             return (False, user_info)
 
-def users_existence():
-    username = request.form['username']
-    print username, dummy_data.existing_users
-    for x in dummy_data.existing_users:
-        print x, x['username']
-        if x['username'] == username:
-            return x
-    return None
+# def users_existence():
+#     username = request.form['username']
+#     print username, dummy_data.existing_users
+#     for x in dummy_data.existing_users:
+#         print x, x['username']
+#         if x['username'] == username:
+#             return x
+#     return None
 @app.route('/users/login', methods=['POST'])
 def users_login():
 
@@ -80,10 +80,10 @@ def users_login():
                 "mata": {},
                 "data": {
                     "users": [{
-                        "login_status" : 'Success',
-                        "id" : user_info[0]['id'],
-                        "name" : user_info[0]['name'],
-                        "access_token" : user_info[0]['access_token']
+                        "status" : 'Success',
+                        "id" : user_info['id'],
+                        "name" : user_info['name'],
+                        "access_token" : user_info['access_token'] #need to add access_token time to live attribute????
                     }]
                 }
             }
@@ -93,7 +93,7 @@ def users_login():
                 "meta" : {},
                 "data" : {
                     "users" : [{
-                    "login" : False,
+                    "status" : "Failed",
                     "message" : "Wrong password"
                     }]
                 }
@@ -104,7 +104,7 @@ def users_login():
                 "meta" : {},
                 "data" : {
                     "users" : [{
-                        "login" : False,
+                        "status" : "Failed",
                         "message" : "User doesn't exists. Sign up please"
                     }]
                 }
@@ -121,21 +121,34 @@ def users_login():
 
 @app.route('/users' , methods=['POST'])
 def users():
+
     name = request.form['name']
-    username = request.form['username']
+    email = request.form['email']
     password = request.form['password']
-    id = len(dummy_data.existing_users)
-    access_token = hash(username+password)
-    dummy_data.existing_users.append({"id" : id, "name" : name, "username": username, "password": password, "access_token" : access_token})
-    response_data = {
+    db = connect_db()
+    try:
+        auth.create_user_in_db(name, email, password, db)
+        response_data = {
                 "meta" : {},
                 "data" : {
                     "users" : [{
-                    "message" : "User has been created. Login now"
+                        "status" : "Sucess",
+                        "message" : "User has been created. Login now"
                     }]
                 }
             }
-    status = 200
+        status = 200
+    except UserAlreadyExists:
+        response_data = {
+                "meta" : {},
+                "data" : {
+                    "users" : [{
+                    "status" : "Failed",
+                    "message" : "User already exists. Login or reset password"
+                    }]
+                }
+            }
+        status = 400
     headers = {
         'Content-Type' : 'application/json'
     }
@@ -145,45 +158,46 @@ def users():
 #response body for user info
 @app.route('/users/<int:user_id>', methods=['GET', 'DELETE'])
 def user_info(user_id):
-    authentication , user_info = authenticate_user(user_id)
-    print  user_info
-    if request.method == 'GET':
-        if user_info :
-            if authentication:
-                response_data = {
-                    "meta":{},
-                    "data":{
-                        "users":[
-                            {
-                                "authentication" : True,
-                                "name" : user_info['name'],
-                                "id" : user_info['id'],
-                                "username" : user_info['username'],
-                            }
-                        ]
-                    }
-                }
-                status = 200
-            else:
-                response_data = {
-                    "meta" : {},
-                    "data" : {
-                        "users" : [{
-                            "authentication" : False,
+    query_access_token = request.args.get('access_token')
+    db = connect_db ()
+    try:
+        user_info = auth.authenticate_using_access_token(query_access_token, db)
+        if request.method == 'GET':
+            print  user_info
+            response_data = {
+                "meta":{},
+                "data":{
+                    "users":[
+                        {
+                            "authentication" : 'Sucess',
                             "name" : user_info['name'],
                             "id" : user_info['id'],
-                            "username" : user_info['username'],
-                        }]
-                    }
+                            "email" : user_info['email'],
+                        }
+                    ]
                 }
-                status = 401
-        else:
+            }
+            status = 200
+    except AccessTokenExpiredError:
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "users" : [{
+                        "authentication" : 'Expired',
+                        "name" : user_info['name'],
+                        "id" : user_info['id'],
+                        "email" : user_info['email'],
+                    }]
+                }
+            }
+            status = 401
+    except NoUserExistsWithThisAccessTokenError:
             response_data = {
                 "meta" : {},
                 "data" : {
                     "users" : [
                         {
-                            "message" : "user with user_id %d doesnot exists" % (user_id)
+                            "message" : "No user exists with access_token %s" % (query_access_token)
                         }
                     ]
                 }
