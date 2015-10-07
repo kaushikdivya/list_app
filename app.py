@@ -6,8 +6,10 @@ import json
 
 from flask import Flask
 from flask import request
-
+import authentication as auth
+import MySQLdb as msql
 import dummy_data
+from authentication import BadPasswordError, NoUserExistsError
 
 app = Flask(__name__)
 app.debug = True
@@ -22,6 +24,10 @@ def hello():
     </body>"""
     return html_string
 
+def connect_db():
+    db = msql.connect(host = '127.0.0.1', user = 'dkaushik', passwd = 'divya123', db = 'list_app')
+
+    return db
 
 def authenticate_user(user_id):
     """
@@ -63,38 +69,37 @@ def users_login():
         # that's how you access request HTTP headers
         #if not request.headers['Content-Type'].lower().startswith('application/json'):
           #  raise ValueError('POST and PUT accept only json data')
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
-        print username , password
-        user_info = users_existence()
-        print user_info
-        if user_info:
-            if user_info['password'] == password:
-                access_token = user_info['access_token']
-                response_data = {
-                    "meta" : {},
-                    "data" : {
+        print email , password
+        db = connect_db()
+        try:
+            user_info = auth.authenticate_using_password(email, password, db)
+            print user_info
+            response_data= {
+                "mata": {},
+                "data": {
+                    "users": [{
+                        "login_status" : 'Success',
+                        "id" : user_info[0]['id'],
+                        "name" : user_info[0]['name'],
+                        "access_token" : user_info[0]['access_token']
+                    }]
+                }
+            }
+            status = 200
+        except BadPasswordError:
+            response_data = {
+                "meta" : {},
+                "data" : {
                     "users" : [{
-                            "login": True,
-                            "id" : user_info['id'],
-                            "name" : user_info['name'],
-                            "access_token" : access_token
-                        }]
-                    }
+                    "login" : False,
+                    "message" : "Wrong password"
+                    }]
                 }
-                status = 200
-            else:
-                response_data = {
-                    "meta" : {},
-                    "data" : {
-                        "users" : [{
-                            "login" : False,
-                            "message" : "Wrong password"
-                        }]
-                    }
-                }
-                status = 400
-        else:
+            }
+            status = 400
+        except NoUserExistsError:
             response_data = {
                 "meta" : {},
                 "data" : {
