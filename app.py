@@ -9,7 +9,9 @@ from flask import request
 import authentication as auth
 import MySQLdb as msql
 import dummy_data
-from authentication import BadPasswordError, NoUserExistsError, UserAlreadyExists, AccessTokenExpiredError, NoUserExistsWithThisAccessTokenError
+from authentication import BadPasswordError, NoUserExistsError, UserAlreadyExistsError, AccessTokenExpiredError, InvalidAccessTokenError,UserDisabledError
+import data_manager as dm
+from data_manager import NoListFoundError, NoItemFoundError
 
 app = Flask(__name__)
 app.debug = True
@@ -29,25 +31,7 @@ def connect_db():
 
     return db
 
-# def authenticate_user(user_id):
-#     """
-#     returns True if user is successfully authenticated, else returns False
-#     """
-#     # TODO:
-#     access_token = None
-#     user_info = None
-#     for x in dummy_data.existing_users:
-#         if x['id'] == user_id:
-#             access_token = x['access_token']
-#             user_info = x
-
-#     if access_token == None:
-#         return (False, user_info)
-#     else:
-#         if access_token == request.args.get('access_token'):
-#             return (True, user_info)
-#         else:
-#             return (False, user_info)
+#def authenticate_accesstoken():
 
 # def users_existence():
 #     username = request.form['username']
@@ -59,13 +43,16 @@ def connect_db():
 #     return None
 @app.route('/users/login', methods=['POST'])
 def users_login():
+    #import pdb; pdb.set_trace()
 
     # that's how you access query parameters
     #access_token = request.args.get('access_token', '')
 
     # that's how you determine what HTTP method is being called
-    if request.method == 'POST':
 
+    #import traceback; traceback.print_exc();
+
+    if request.method == 'POST':
         # that's how you access request HTTP headers
         #if not request.headers['Content-Type'].lower().startswith('application/json'):
           #  raise ValueError('POST and PUT accept only json data')
@@ -76,14 +63,15 @@ def users_login():
         try:
             user_info = auth.authenticate_using_password(email, password, db)
             print user_info
-            response_data= {
-                "mata": {},
-                "data": {
-                    "users": [{
-                        "status" : 'Success',
-                        "id" : user_info['id'],
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "users" : [{
+                        "authentication" : 'Sucess',
                         "name" : user_info['name'],
-                        "access_token" : user_info['access_token'] #need to add access_token time to live attribute????
+                        "id" : user_info['id'],
+                        "email" : user_info['email'],
+                        "access_token" : user_info['access_token']
                     }]
                 }
             }
@@ -99,6 +87,7 @@ def users_login():
                 }
             }
             status = 400
+
         except NoUserExistsError:
             response_data = {
                 "meta" : {},
@@ -138,16 +127,27 @@ def users():
                 }
             }
         status = 200
-    except UserAlreadyExists:
+    except UserAlreadyExistsError:
         response_data = {
                 "meta" : {},
                 "data" : {
                     "users" : [{
                     "status" : "Failed",
-                    "message" : "User already exists. Login or reset password"
+                    "message" : "User already exists with email : %s. Login or reset password" %(email)
                     }]
                 }
             }
+        status = 400
+    except UserDisabledError:
+        response_data = {
+                "meta" : {},
+                "data" : {
+                    "users" : [{
+                        "status" : "Failed",
+                        "message" : "User with the email : %s already exists but is disabled for now." % (email)
+                    }]
+                }
+        }
         status = 400
     headers = {
         'Content-Type' : 'application/json'
@@ -158,153 +158,216 @@ def users():
 #response body for user info
 @app.route('/users/<int:user_id>', methods=['GET', 'DELETE'])
 def user_info(user_id):
+
     query_access_token = request.args.get('access_token')
     db = connect_db ()
     try:
         user_info = auth.authenticate_using_access_token(query_access_token, db)
-        if request.method == 'GET':
-            print  user_info
-            response_data = {
-                "meta":{},
-                "data":{
-                    "users":[
-                        {
-                            "authentication" : 'Sucess',
-                            "name" : user_info['name'],
-                            "id" : user_info['id'],
-                            "email" : user_info['email'],
-                        }
-                    ]
-                }
-            }
-            status = 200
     except AccessTokenExpiredError:
-            response_data = {
-                "meta" : {},
-                "data" : {
-                    "users" : [{
-                        "authentication" : 'Expired',
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [{
+                    "authentication" : 'Expired',
+                    "message" : "Access token Expired"
+                }]
+            }
+        }
+        status = 401
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+    except InvalidAccessTokenError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [
+                    {
+                        "message" : "Invalid access token : %s" % (query_access_token)
+                    }
+                ]
+            }
+        }
+        status = 400
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+
+
+    print type(user_info)
+    if request.method == 'GET':
+        print  user_info
+        response_data = {
+            "meta":{},
+            "data":{
+                "users":[
+                    {
+                        "authentication" : 'Sucess',
                         "name" : user_info['name'],
                         "id" : user_info['id'],
                         "email" : user_info['email'],
-                    }]
-                }
+                    }
+                ]
             }
-            status = 401
-    except NoUserExistsWithThisAccessTokenError:
-            response_data = {
-                "meta" : {},
-                "data" : {
-                    "users" : [
-                        {
-                            "message" : "No user exists with access_token %s" % (query_access_token)
-                        }
-                    ]
-                }
-            }
-            status = 400
-
+        }
+        status = 200
     else:
-        if  user_info :
-            if authentication:
-                user_info['id'] = None
-                response_data = {
-                    "meta":{},
-                    "data":{
-                        "users":[
-                            {
-                                "authentication" : True,
-                                "name" : user_info['name'],
-                                "id" : user_info['id'],
-                                "username" : user_info['username'],
-                                "delete" : "success"
-                            }
-                        ]
+        dm.deactive_user(user_info['id'], query_access_token, db)
+        response_data = {
+            "meta":{},
+            "data":{
+                "users":[
+                    {
+                        "authentication" : "Success",
+                        "name" : user_info['name'],
+                        "id" : user_info['id'],
+                        "name" : user_info['name'],
+                        "delete" : "success"
                     }
-                }
-                status = 200
-            else:
-                response_data = {
-                    "meta" : {},
-                    "data" : {
-                        "users" : [{
-                            "authentication" : False,
-                            "name" : user_info['name'],
-                            "id" : user_info['id'],
-                            "username" : user_info['username'],
-                            "delete" : "failure"
-                        }]
-                    }
-                }
-                status = 401
-        else:
-            response_data = {
-                "meta" : {},
-                "data" : {
-                    "users" : [
-                        {
-                            "message" : "user with user_id %d doesnot exists" % (user_id),
-                            "delete" : "failure"
-                        }
-                    ]
-                }
+                ]
             }
-            status = 400
+        }
+        status = 200
+
     body = json.dumps(response_data)
     headers = {
                  'Content-Type' : 'application/json'
             }
     return (body, status, headers)
 
-# POST and GET http request on /lists
-@app.route('/lists', methods=['POST', 'GET'])
-def lists():
-    access_token = request.args.get('access_token')
-    # TODO: authenticate based on access_token
-
-    #All list under that user
-    if request.method == 'GET':
+# PUT http request on logout
+@app.route('/users/logout', methods = ['PUT'])
+def logout():
+    query_access_token = request.args.get('access_token')
+    db = connect_db ()
+    try:
+        user_info = auth.authenticate_using_access_token(query_access_token, db)
+        user_id = user_info['id']
+    except AccessTokenExpiredError:
         response_data = {
             "meta" : {},
             "data" : {
-                "lists" : [
+                "users" : [{
+                    "authentication" : 'Expired',
+                    "message" : "Access token Expired"
+                }]
+            }
+        }
+        status = 401
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+    except InvalidAccessTokenError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [
                     {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
+                        "message" : "Invalid access token : %s" % (query_access_token)
                     }
                 ]
+            }
+        }
+        status = 400
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+
+    #Logout user after authentication via access token
+    dm.logout_user(query_access_token, db)
+    response_data = {
+        "meta" : {},
+        "data" : {
+            "users" : [
+                {
+                    "status" : "user logged out"
+                }
+            ]
+        }
+    }
+    status = 200
+    body = json.dumps(response_data)
+    headers = {
+        'Content-Type' : 'application/json'
+    }
+    return (body, status, headers)
+
+
+# POST and GET http request on /lists
+@app.route('/lists', methods = ['POST', 'GET'])
+def lists():
+
+    query_access_token = request.args.get('access_token')
+    db = connect_db ()
+    try:
+        user_info = auth.authenticate_using_access_token(query_access_token, db)
+        user_id = user_info['id']
+    except AccessTokenExpiredError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [{
+                    "authentication" : 'Expired',
+                    "message" : "Access token Expired"
+                }]
+            }
+        }
+        status = 401
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+    except InvalidAccessTokenError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [
+                    {
+                        "message" : "Invalid access token : %s" % (query_access_token)
+                    }
+                ]
+            }
+        }
+        status = 400
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+    #All list under that user
+    if request.method == 'GET':
+        try:
+            list_of_lists = dm.list_of_list(user_id, db)
+            print list_of_lists
+        except NoListFoundError:
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [{
+                        "message" : "No List found of this user"
+                    }]
+                }
+            }
+            body = json.dumps(response_data)
+            status = 200
+            headers = {
+                "Content-Type" : 'application/json'
+            }
+            return (body,status,headers)
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : user_info,
+                "lists" : list_of_lists
             }
         }
         body = json.dumps(response_data)
@@ -315,60 +378,13 @@ def lists():
         return (body,status,headers)
     else:
         # Add new list(how to handle request data)
-        new_list_name = "Household list"
+        data = request.json['data']
+        list_name = data['lists'][0]['name']
+        list_info = list(dm.create_new_list(list_name, user_id, db))
         response_data = {
             "meta" : {},
             "data" : {
-                "lists" : [
-                    {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 4,
-                        "name" : new_list_name,
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
+                "lists" : list_info
             }
         }
         body = json.dumps(response_data)
@@ -378,550 +394,411 @@ def lists():
         }
         return (body,status,headers)
 
+
+
 #change name of the existing list
-@app.route('/lists/<int:list_id>', methods=['PUT'])
+@app.route('/lists/<int:list_id>', methods=['PUT', 'GET', 'DELETE'])
 def change_list_name(list_id):
-    new_name = "Vacation list"
-    if list_id == 1:
-        response_data = {
-            "meta" : {},
-            "data" : {
-                "lists" : [
-                    {
-                        "id" : 1,
-                        "name" : new_name,
-                         "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 4,
-                        "name" :  "Household list",
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
-            }
-        }
-    elif list_id == 2:
-        response_data = {
-            "meta" : {},
-            "data" : {
-                "lists" : [
-                    {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                         "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : new_name,
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 4,
-                        "name" :  "Household list",
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
-            }
-        }
-    elif list_id == 3:
-        response_data = {
-            "meta" : {},
-            "data" : {
-                "lists" : [
-                    {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                         "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : new_name,
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 4,
-                        "name" :  "Household list",
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
-            }
-        }
-    elif list_id == 4:
-        response_data = {
-            "meta" : {},
-            "data" : {
-                "lists" : [
-                    {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                         "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 4,
-                        "name" :  new_name,
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
-            }
-        }
-    else:
-        raise ValueError("No list with list_id %d found" % list_id)
-    body = json.dumps(response_data)
-    status = 200
-    headers = {
-        'Content-Type' : 'application/json'
-    }
-    return (body,status,headers)
 
-#Delete the complete list
-@app.route('/lists/<int:list_id>', methods=['DELETE'])
-def delete_list(list_id):
-    if list_id == 1:
+    query_access_token = request.args.get('access_token')
+    db = connect_db ()
+    try:
+        user_info = auth.authenticate_using_access_token(query_access_token, db)
+        user_id = user_info['id']
+    except AccessTokenExpiredError:
         response_data = {
             "meta" : {},
             "data" : {
-                "lists" : [
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 4,
-                        "name" :  "Household list",
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
+                "users" : [{
+                    "authentication" : 'Expired',
+                    "message" : "Access token Expired"
+                }]
             }
         }
-    elif list_id == 2:
+        status = 401
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+    except InvalidAccessTokenError:
         response_data = {
             "meta" : {},
             "data" : {
-                "lists" : [
+                "users" : [
                     {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                         "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 4,
-                        "name" :  "Household list",
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
+                        "message" : "Invalid access token : %s" % (query_access_token)
                     }
                 ]
             }
         }
-    elif list_id == 3:
-        response_data = {
-            "meta" : {},
-            "data" : {
-                "lists" : [
-                    {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                         "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-
-                    {
-                        "id" : 4,
-                        "name" :  "Household list",
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
-            }
+        status = 400
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
         }
-    elif list_id == 4:
-        response_data = {
-            "meta" : {},
-            "data" : {
-                "lists" : [
-                    {
-                        "id" : 1,
-                        "name" : "Grocery list",
-                         "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "eggs",
-                                            "quantity" : "12 pc",
-                                            "status" :  "Incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    },
-                    {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
+        return (body, status, headers)
+    if request.method == 'PUT':
+        print request.json
+        data = request.json['data']
+        new_name = data['lists'][0]['name']
+        try:
+            list_info = dm.change_list_name(list_id, new_name, user_id, db)
+        except NoListFoundError:
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [{
+                        "message" : "No List found of this user"
+                    }]
+                }
             }
-        }
-    else:
-        raise ValueError("No list with list_id %d found" % list_id)
-    body = json.dumps(response_data)
-    status = 200
-    headers = {
-    'Content-Type' : 'application/json'
-    }
-    return (body, status, headers)
-
-#fetching item to a list
-@app.route('/list/<list_id>', methods=['POST'])
-def fetch_items(list_id):
-    if list_id == 1:
-        response_data = {
-        "meta" : {},
-        "data" : {
-            "lists" : [
-                {
-                    "id" : 1,
-                    "name" : "Grocery list",
-                    "items" : [
-                                        {
-                                        "id" : 1,
-                                        "name" : "eggs",
-                                        "quantity" : "12 pc",
-                                        "status" :  "Incomplete"
-                                        }
-                                    ]
-                    }
-                ]
+            body = json.dumps(response_data)
+            status = 400
+            headers = {
+                "Content-Type" : 'application/json'
             }
-        }
-    elif list_id == 2:
+            return (body,status,headers)
         response_data = {
-        "meta" : {},
-        "data" : {
-            "lists" : [
-                    {
-                        "id" : 2,
-                        "name" : "Shopping list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Anne taylor top",
-                                            "quantity" : "7 pc",
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    }
-                ]
-            }
-        }
-
-    elif list_id == 3:
-        response_data = {
-        "meta" : {},
-        "data" : {
-            "list": {
-                        "id" : 3,
-                        "name" : "to-do list",
-                        "items" : [
-                                            {
-                                            "id" : 1,
-                                            "name" : "Python programming",
-                                            "quantity" : None,
-                                            "status" : "incomplete"
-                                            }
-                        ]
-                    }
+                "meta" : {},
+                "data" : {
+                    "lists" : list_info
                 }
             }
 
-    elif list_id == 4:
+        status = 200
+    elif request.method == 'GET': #fetching list info as per the list id
+        try:
+            list_info = dm.fetch_list(list_id, user_id, db)
+        except NoListFoundError:
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [{
+                        "message" : "No List found of this user"
+                    }]
+                }
+            }
+            body = json.dumps(response_data)
+            status = 400
+            headers = {
+                "Content-Type" : 'application/json'
+            }
+            return (body,status,headers)
         response_data = {
-        "meta" : {},
-        "data" : {
-            "lists" : [
-            {
-                        "id" : 4,
-                        "name" :  "Household list",
-                        "items" : [
-                                            {
-                                                "id" : 1,
-                                                "name" : "Toilet paper",
-                                                "quantity" :  "32 pc",
-                                                "status" : "incomplete"
-                                            }
-                        ]
+            "meta" : {},
+            "data" : {
+                "lists" : list_info
+            }
+        }
+        status = 200
+    else: # deleting entire list from the user's list
+        try:
+            dm.delete_list(list_id, user_id, db)
+        except NoListFoundError:
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [{
+                        "message" : "No List found of this user"
+                    }]
+                }
+            }
+            body = json.dumps(response_data)
+            status = 400
+            headers = {
+                "Content-Type" : 'application/json'
+            }
+            return (body,status,headers)
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "lists" : [{
+                    "message" : "List deleted from the user's list"
+                }]
+            }
+        }
+        status = 200
+    headers = {
+        'Content-Type' : 'application/json'
+    }
+    body = json.dumps(response_data)
+    return (body,status,headers)
+
+#Adding item to a list
+@app.route('/lists/<int:list_id>/items', methods = ['POST'])
+def add_item(list_id):
+
+    query_access_token = request.args.get('access_token')
+    db = connect_db ()
+    try:
+        user_info = auth.authenticate_using_access_token(query_access_token, db)
+        user_id = user_info['id']
+    except AccessTokenExpiredError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [{
+                    "authentication" : 'Expired',
+                    "message" : "Access token Expired"
+                }]
+            }
+        }
+        status = 401
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+    except InvalidAccessTokenError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [
+                    {
+                        "message" : "Invalid access token : %s" % (query_access_token)
                     }
                 ]
             }
         }
-
-    else:
-        raise ValueError("No list found with list_id %d found" % list_id)
-
-# that's how you bound parts of URL to parameter that go to your function
-@app.route('/lists/<int:list_id>', methods=['GET', 'POST'])
-def lists_with_list_id(list_id):
-
-    if request.method == 'GET':
+        status = 400
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+    try:
+        data = request.json['data']
+        name = data['lists'][0]['items'][0]['name']
+        status = data['lists'][0]['items'][0]['status']
+        quantity = data['lists'][0]['items'][0]['quantity']
+        list_item_info = dm.add_item_to_list(list_id, user_id, name, status, quantity, db)
+    except NoListFoundError:
         response_data = {
-            'meta': {},
-            'data': {
-                "lists": [
-                    {
-                        "id": list_id,
-                        "name": "dummy-list-name",
-                        "items": [
-                            {
-                                "id": 1,
-                                "name": "tide",
-                                "status": "incomplete"
-                            }
-                        ]
-                    }
-                ]
+            "meta" : {},
+            "data" : {
+                "lists" : [{
+                    "message" : "No List found of this user"
+                }]
             }
         }
         body = json.dumps(response_data)
-        status = 200
+        status = 400
         headers = {
-            'Content-Type': 'application/json'
+            "Content-Type" : 'application/json'
         }
-        # that's how you send back a response
+        return (body,status,headers)
+    response_data = {
+        "meta" : {},
+        "data" : {
+            "lists" : [
+                list_item_info
+            ]
+        }
+    }
+    status = 400
+    body = json.dumps(response_data)
+    headers = {
+        "Content-Type" : 'application/json'
+    }
+    return (body,status,headers)
+
+#PUT and DELETE http request on items
+@app.route('/lists/<int:list_id>/items/<int:item_id>', methods = ['PUT' , 'DELETE'])
+def Item_modification(list_id, item_id):
+    query_access_token = request.args.get('access_token')
+    db = connect_db ()
+    try:
+        user_info = auth.authenticate_using_access_token(query_access_token, db)
+        user_id = user_info['id']
+    except AccessTokenExpiredError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [{
+                    "authentication" : 'Expired',
+                    "message" : "Access token Expired"
+                }]
+            }
+        }
+        status = 401
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
         return (body, status, headers)
+    except InvalidAccessTokenError:
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "users" : [
+                    {
+                        "message" : "Invalid access token : %s" % (query_access_token)
+                    }
+                ]
+            }
+        }
+        status = 400
+        body = json.dumps(response_data)
+        headers = {
+            'Content-Type' : 'application/json'
+        }
+        return (body, status, headers)
+
+    #Change requests for name and status of an item
+    if request.method == 'PUT':
+        data = request.json['data']['lists'][0]['items'][0]
+        print data
+        if 'name' in data:
+            try:
+                list_item_info = dm.change_item_name(user_id, list_id, item_id, data['name'], db)
+            except NoItemFoundError:
+                response_data = {
+                    "meta" : {},
+                    "data" : {
+                        "lists" : [{
+                            "message" : "No Item found of this list"
+                        }]
+                    }
+                }
+                body = json.dumps(response_data)
+                status = 400
+                headers = {
+                    "Content-Type" : 'application/json'
+                }
+                return (body,status,headers)
+            except NoListFoundError:
+                response_data = {
+                    "meta" : {},
+                    "data" : {
+                        "lists" : [{
+                            "message" : "No List found of this user"
+                        }]
+                    }
+                }
+                body = json.dumps(response_data)
+                status = 400
+                headers = {
+                    "Content-Type" : 'application/json'
+                }
+                return (body,status,headers)
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [
+                        list_item_info
+                    ]
+                }
+            }
+            status = 400
+            body = json.dumps(response_data)
+            headers = {
+                "Content-Type" : 'application/json'
+            }
+            return (body,status,headers)
+        else:
+            try:
+                list_item_info = dm.change_item_status(user_id, list_id, item_id, data['status'], db)
+            except NoItemFoundError:
+                response_data = {
+                    "meta" : {},
+                    "data" : {
+                        "lists" : [{
+                            "message" : "No Item found of this list"
+                        }]
+                    }
+                }
+                body = json.dumps(response_data)
+                status = 400
+                headers = {
+                    "Content-Type" : 'application/json'
+                }
+                return (body,status,headers)
+            except NoListFoundError:
+                response_data = {
+                    "meta" : {},
+                    "data" : {
+                        "lists" : [{
+                            "message" : "No List found of this user"
+                        }]
+                    }
+                }
+                body = json.dumps(response_data)
+                status = 400
+                headers = {
+                    "Content-Type" : 'application/json'
+                }
+                return (body,status,headers)
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [
+                        list_item_info
+                    ]
+                }
+            }
+            status = 400
+            body = json.dumps(response_data)
+            headers = {
+                "Content-Type" : 'application/json'
+            }
+            return (body,status,headers)
+
+    else:
+        try:
+            dm.delete_item(user_id, list_id, item_id, db)
+        except NoListFoundError:
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [{
+                        "message" : "No List found of this user"
+                    }]
+                }
+            }
+            body = json.dumps(response_data)
+            status = 400
+            headers = {
+                "Content-Type" : 'application/json'
+            }
+            return (body,status,headers)
+        except NoItemFoundError:
+            response_data = {
+                "meta" : {},
+                "data" : {
+                    "lists" : [{
+                        "message" : "No Item found of this list"
+                    }]
+                }
+            }
+            body = json.dumps(response_data)
+            status = 400
+            headers = {
+                "Content-Type" : 'application/json'
+            }
+            return (body,status,headers)
+        response_data = {
+            "meta" : {},
+            "data" : {
+                "lists" : [
+                    {
+                        "items": {
+                            "message" : "Item deleted from the list"
+                        }
+                    }
+                ]
+            }
+        }
+        status = 400
+        body = json.dumps(response_data)
+        headers = {
+            "Content-Type" : 'application/json'
+        }
+        return (body,status,headers)
+
+
+
+
 
 
 if __name__ == "__main__":
