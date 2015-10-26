@@ -1,0 +1,18 @@
+{% extends "profilelayout.html" %}
+{% block content %}
+<div class="container-fluid">
+    <h3>Here is the list {{ list_info[0]['name'] }}</h3>
+    <dl>
+        <dt> {{list_info[0]['name']}}</dt>
+        <dd>{% for item in list_info[0]['items']%}
+        -{{item['name']}}
+        {{item['status']}}<br>
+        {{item['quantity']}}<br>
+        {% endfor%}
+        </dd>
+
+
+
+    </dl>
+</div>
+{% endblock %}

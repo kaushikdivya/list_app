@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class = "container text-center" align="center">
+    <div class="jumbotron text-center" style="width:500px" >
+
+    <form class = "form-inline text-center" action="{{url_for('login')}}" method = "post" style="text-align:center">
+        {{ form.hidden_tag() }}
+
+
+        {{ form.email(class_="form-control", placeholder="Email", style="width:300px") }}<br><br>
+
+
+        {{ form.password(class_="form-control", placeholder="Password", style="width:300px") }}<br><br>
+
+        {{ form.submit(class_="btn btn-primary", style="width:300px") }}
+
+    </form>
+    <a href="/" style="text-align:center"><h4>Forgot Password</h4></a>
+</div>
+</div>
+
+
+{% endblock %}

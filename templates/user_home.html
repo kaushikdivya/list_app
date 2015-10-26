@@ -1,0 +1,25 @@
+{% extends "profilelayout.html" %}
+{% block content %}
+
+    <div class = "container-fluid">
+
+        <div><h3>Hi {{user_info['name']}}, Welcome to Life Organizer</h3>
+        </div>
+
+        <div class = "user_lists">
+
+            {% for list in lists %}
+                <ul class = "user_list">
+                    <li>
+                        <a href="{{ url_for('lists', list_id=list['id']) }}">
+                            {{ list['name'] }}
+                        </a>
+                    </li>
+                </ul>
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+{% endblock %}
