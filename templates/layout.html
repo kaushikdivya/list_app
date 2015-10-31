@@ -4,9 +4,9 @@
         <title>List App</title>
         <meta name = "viewport" content = "width=device-width", initial-scale = 1">
         <link href = "{{ url_for ('static', filename='css/bootstrap.min.css')}}" rel="stylesheet">
+        <link href = "{{ url_for ('static', filename='css/main.css')}}" rel="stylesheet">
         <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico')}}"
-        <script src="//code.jquery.com/jquery-1.11.1.min.js"></script>
-        <script type="text/javascript" src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+
 
     </head>
 
@@ -44,15 +44,21 @@
 <hr>
 {% with messages = get_flashed_messages() %}
     {% if messages %}
-    <ul>
+
         {% for message in messages %}
-            <li>{{ message }} </li>
+            <div class = "container-fluid">
+                <div class = "alert alert-danger" style="width:500px">
+                    {{ message }}
+                </div>
+            </div>
         {% endfor %}
-    </ul>
+
     {% endif %}
 {% endwith %}
 {% block content %}
 {% endblock %}
+<script src="//code.jquery.com/jquery-1.11.1.min.js"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
 </body>
 
 </html>

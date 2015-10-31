@@ -37,11 +37,13 @@
     <hr>
     {% with messages = get_flashed_messages() %}
         {% if messages %}
-        <ul>
             {% for message in messages %}
-                <li>{{ message }} </li>
+            <div class = "container-fluid" align="center">
+                <div class = "alert alert-danger" style="width:300px">
+                    {{ message }}
+                </div>
+            </div>
             {% endfor %}
-        </ul>
         {% endif %}
     {% endwith %}
     {% block content %}
