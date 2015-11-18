@@ -67,6 +67,8 @@ var my_func = function() {
         } else {
             radio.find('input:text').css('textDecoration', 'none');
             radio.find('input[name="status"]').attr("value", "incomplete");
+            radio.find('input[name="fields"]').removeAttr("disabled");
+            radio.find('input[name="quantity"]').removeAttr("disabled");
             // radio.find('input').addClass('unchecked').removeClass('checked');
             // $('input:not(.unchecked)').attr("disabled","disabled")
             // $(this).parents().eq(5).submit();
