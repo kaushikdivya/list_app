@@ -176,7 +176,7 @@ def new_list():
         return redirect(url_for('login'))
 
 
-@app.route('/lists/<int:list_id>', methods=['GET'])
+@app.route('/lists/<int:list_id>', methods=['GET', 'POST'])
 def lists(list_id):
     if 'access_token' in session:
         print 'list_id: %s, access_token: %s' % (list_id, request.args.get('access_token'))
@@ -194,12 +194,91 @@ def lists(list_id):
             return redirect(url_for('login'))
         except NoListFoundError:
             flash("No List found with this id:%d" %(list_id))
-            return redirect(url_for('users', user_id = user_info['id'],
-            access_token = user_info['access_token'] ))
+            return redirect(url_for('users'))
+    else:
+        return redirect(url_for('login'))
+
+    if request.method == 'GET':
         response = make_response(render_template('list_info.html', list_info=list_info))
         return no_cache(response)
     else:
+        # import pdb;pdb.set_trace()
+        #input_values = map(lambda x:x(0), request.form)
+        print request.form
+        id = request.form.getlist('item_id')
+        non_empty_id = filter(lambda x:x != "", id)
+        print non_empty_id
+        clean_input = zip(
+            request.form.getlist('item_id'),
+            request.form.getlist('status'),
+            request.form.getlist('fields'),
+            request.form.getlist('quantity')
+        )
+        print clean_input
+        for x in clean_input:
+            id = x[0]
+            status = x[1]
+            name = x[2]
+            quantity = x[3]
+            if id in non_empty_id:
+                try:
+                    print id
+                    list_item_info = dm.update_item(user_id, list_id, id, name, status, quantity, db)
+
+                except NoItemFoundError:
+                    flash("No item found")
+                    return redirect(url_for('users'))
+                except NoListFoundError:
+                    flash("No List found with this id:%d" %(list_id))
+                    return redirect(url_for('users'))
+            else:
+                try:
+
+                    list_item_info = dm.add_item_to_list(list_id, user_id, name, status, quantity, db)
+
+                except NoListFoundError:
+                    flash("No list found with list_id :%s" % list_id)
+                    return redirect(url_for('users'))
+        list_info = dm.fetch_list(list_id, user_id, db)
+        response = make_response(render_template('list_info.html', list_info=list_info))
+        return no_cache(response)
+
+
+@app.route('/lists/<int:list_id>/items/delete', methods=['POST'])
+def delete_item(list_id):
+    if 'access_token' in session:
+        print 'list_id: %s, access_token: %s' % (list_id, request.args.get('access_token'))
+        access_token = session.get('access_token', None)
+        db = connect_db ()
+        try:
+            user_info = auth.authenticate_using_access_token(access_token, db)
+            user_id = user_info['id']
+            list_info = dm.fetch_list(list_id, user_id, db)
+        except AccessTokenExpiredError:
+            flash("Access Token Expired. Login again")
+            return redirect(url_for('login'))
+        except InvalidAccessTokenError:
+            flash("In Valid Access Token. Login again")
+            return redirect(url_for('login'))
+        except NoListFoundError:
+            flash("No List found with this id:%d" %(list_id))
+            return redirect(url_for('users'))
+    else:
         return redirect(url_for('login'))
+
+    try:
+        item_id = request.form['item_id']
+        dm.delete_item(user_id, list_id, item_id, db)
+        list_info = dm.fetch_list(list_id, user_id, db)
+    except NoItemFoundError:
+        flash("No item found")
+        return redirect(url_for('users'))
+    except NoListFoundError:
+        flash("No List found with this id:%d" %(list_id))
+        return redirect(url_for('users'))
+    response = make_response(render_template('list_info.html', list_info=list_info))
+    return redirect(url_for('lists', list_id = list_id))
+
 
 @app.route('/logout')
 def logout():

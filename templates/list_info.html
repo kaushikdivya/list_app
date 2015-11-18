@@ -1,70 +1,62 @@
 {% extends "profilelayout.html" %}
 {% block content %}
+
+<script src="//code.jquery.com/jquery-1.11.1.min.js"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+
 <div class="container-fluid text-center">
-    <div class="container">
-	<div class="row">
-        <div class="control-group" id="fields">
-            <label class="control-label" for="field1">Nice Multiple Form Fields</label>
-            <div class="controls">
-                <form role="form" autocomplete="off">
-                    <div class="entry input-group col-xs-3">
-                        <input class="form-control" name="fields[]" type="text" placeholder="Type something" />
-                    	<span class="input-group-btn">
-                            <button class="btn btn-success btn-add" type="button">
-                                <span class="glyphicon glyphicon-plus"></span>
-                            </button>
-
-                        </span>
-
-                    </div>
-                </form>
-            <br>
-            <small>Press <span class="glyphicon glyphicon-plus gs"></span> to add </small>
-            </div>
-        </div>
-	</div>
-</div>
     <h3>Here is the list {{ list_info[0]['name'] }}</h3>
     <dl>
         <dt> {{list_info[0]['name']}}</dt>
-        <dd>{% for item in list_info[0]['items']%}
-        -{{item['name']}}
-        {{item['status']}}<br>
-        {{item['quantity']}}<br>
-        {% endfor%}
-        </dd>
-
-
-
-    </dl>
+	<div class="row">
+        <div class="control-group" id="fields">
+            <div class="controls">
+                <form name= "input_form" role="form"  class="form-inline" autocomplete="off" action="{{url_for('lists', list_id = request.path.split('/')[2])}}" method="post">
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-success update-list-button">Update list</button>
+                    </div>
+                    <div class="form-group">
+                        <button type="button" class="btn btn-success add-new-item-button">New item</button>
+                    </div>
+                    <br><br>
+                    <div class="items-list">
+                    {% for item in list_info[0]['items']%}
+                        <div class="row">
+                            <div class="list-item">
+                                <div class="form-group">
+                                    <!--<span class="input-group-addon">-->
+                                    <div class="radio" item_id="{{item['id']}}">
+                                        {% if item['status'] == 'incomplete' %}
+                                            <input class="check" type="checkbox" name="check">
+                                            <input type="hidden" name="item_id" value="{{ item['id']}}">
+                                            <input type="hidden" name="status" value="{{ item['status']}}">
+                                            <input type="text" class="form-control check_label" name="fields" value="{{item['name']}}">
+                                            <input type="text" class="form-control check_label" name="quantity" value="{{item['quantity']}}">
+                                        {% else %}
+                                            <input class="check" type="checkbox" name="check" checked>
+                                            <input type="hidden" name="item_id" value="{{ item['id']}}">
+                                            <input type="hidden" name="status" value="{{ item['status']}}">
+                                            <input type="text" class="form-control check_label" style = "text-decoration:line-through" name="fields" value= "{{item['name']}}">
+                                            <input type="text" class="form-control check_label" style = "text-decoration:line-through" name="quantity" value="{{item['quantity']}}">
+                                        {% endif %}
+                                        <button type="button" class="btn btn-default trash_btn" name="trash_btn">
+                                            <span class="glyphicon glyphicon-trash"></span>
+                                        </button>
+                                    </div>
+                                    <br>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor%}
+                </div>
+                </form>
+            </div>
+        </div>
+	</div>
+</dl>
 </div>
 
-<script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/add_items_to_list.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('static', filename='js/items.js') }}"></script>
 
-$(function()
-{
-    $(document).on('click', '.btn-add', function(e)
-    {
-        e.preventDefault();
-
-        var controlForm = $('.controls form:first'),
-            currentEntry = $(this).parents('.entry:first'),
-            newEntry = $(currentEntry.clone()).appendTo(controlForm);
-
-        newEntry.find('input').val('');
-        controlForm.find('.entry:not(:last) .btn-add')
-            .removeClass('btn-add').addClass('btn-remove')
-            .removeClass('btn-success').addClass('btn-danger')
-            .html('<span class="glyphicon glyphicon-minus"></span>');
-    }).on('click', '.btn-remove', function(e)
-    {
-		$(this).parents('.entry:first').remove();
-
-		e.preventDefault();
-		return false;
-	});
-});
-
-
-</script>
 {% endblock %}

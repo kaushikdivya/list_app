@@ -104,6 +104,7 @@ def validate_item(list_id, item_id, db):
     if cur.rowcount == 0:
         raise NoItemFoundError
 
+#only changes item name(quantity missed)
 def change_item_name(user_id, list_id, item_id, name, db):
     validate_list(list_id, user_id, db)
     validate_item(list_id, item_id, db)
@@ -118,6 +119,7 @@ def change_item_name(user_id, list_id, item_id, name, db):
     print list_info
     return list_info
 
+#only changes item status(quantity missed)
 def change_item_status(user_id, list_id, item_id, status, db):
     validate_list(list_id, user_id, db)
     validate_item(list_id, item_id, db)
@@ -140,8 +142,16 @@ def delete_item(user_id, list_id, item_id, db):
     cur.execute("""update items set deleted_time = %s where id = %s and list_id = %s and deleted_time is null""" , (now, item_id, list_id))
     db.commit()
 
-
-
-
-
-
+def update_item(user_id, list_id, item_id, name, status, quantity, db):
+    validate_list(list_id, user_id, db)
+    validate_item(list_id, item_id, db)
+    cur = db.cursor(msql.cursors.DictCursor)
+    cur.execute("""update items set name = %s, quantity = %s, status = %s  where id = %s and deleted_time is null""", (name, quantity, status, item_id))
+    db.commit()
+    cur.execute("""select id, name, status from lists where id = %s and deleted_time is null""", (list_id,))
+    list_info = cur.fetchone()
+    print list_info
+    cur.execute("""select id, name, status, quantity from items where list_id = %s and id = %s and deleted_time is null""", (list_id, item_id))
+    list_info['items'] = list(cur.fetchall())
+    print list_info
+    return list_info
