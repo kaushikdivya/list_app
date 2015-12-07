@@ -12,16 +12,11 @@ import data_manager as dm
 from data_manager import NoListFoundError, NoItemFoundError
 import settings
 
-# import config
-# config.SECRET_KEY
-#app.config['SECRET_KEY']
-# app.config['SESSION_COOKIE_NAME'] = settings.SESSION_COOKIE_NAME
 app.config.update({
-    'SECRET_KEY': 'number_guessing_game',
+    'SECRET_KEY': settings.SECRET_KEY,
     'SESSION_COOKIE_NAME': settings.SESSION_COOKIE_NAME
 })
 
-# app.secret_key = 'number_guessing_game'
 #need to check what this cache control is and it's values.
 def no_cache(response):
     response.headers.add('Cache-Control', 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0')
@@ -35,6 +30,8 @@ def connect_db():
         passwd=settings.DATABASES['list_manager_db']['password'],
         db=settings.DATABASES['list_manager_db']['db_name']
     )
+
+db = connect_db()
 
 @app.route('/login', methods = ['GET', 'POST'])
 def login():

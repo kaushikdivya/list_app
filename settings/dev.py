@@ -7,3 +7,4 @@ DATABASES = {
         'db_name': 'list_app'
     }
 }
+SECRET_KEY = '6d89d76be6723cbf3ae9766283b189a0'
